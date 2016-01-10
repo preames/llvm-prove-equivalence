@@ -11,10 +11,18 @@
 import os
 import subprocess
 import sys
+import optparse
 
-assert len(sys.argv) == 3
-file1 = sys.argv[1]
-file2 = sys.argv[2]
+
+parser = optparse.OptionParser()
+parser.add_option("-v", "--verbose",
+                  action="store_true", dest="verbose", default=False,
+                  help="Be verbose about differences in the input files")
+(options, args) = parser.parse_args()
+
+assert len(args) == 2
+file1 = args[0]
+file2 = args[1]
 assert os.path.exists(file1)
 assert os.path.exists(file2)
 
@@ -31,7 +39,7 @@ assert os.path.exists(file2)
 # - module names?
 # Note: When adding passes here, need to be careful not to remove 
 # optimization hints.  Doing so would limit how well we can canonicalize
-canonicalization_passes = "".join(["-strip-debug"])
+canonicalization_passes = " ".join(["-strip-debug", "-strip"])
 
 cmd = "$LLVM_BASE_DIR/bin/opt %s -O3 %s" % (canonicalization_passes, file1)
 output1 = subprocess.check_output(cmd, shell=True)
@@ -45,6 +53,18 @@ else:
     # TODO: Is it worth reporting cases which are obviously *NOT* the
     # same?  i.e. to prune more expensive searches?
     print "Versions are potentially different"
+    if options.verbose:
+        print ""
+        print "Differences remaining (verbose):"
+        # As a verbose debugging mode, use llvm-diff to try to understand 
+        # the differences
+        cmd = "$LLVM_BASE_DIR/bin/llvm-diff %s %s" % (file1, file2)
+        try:
+            output2 = subprocess.check_output(cmd, shell=True)
+        except subprocess.CalledProcessError:
+            # purposely ignore error, the output got printed anyway
+            pass
+    sys.exit(1)
 
 # Note: A more complicated scheme is possible, but the optimizer does a rather 
 # good job of canonicalizing near by inputs to the same output on its own.  
